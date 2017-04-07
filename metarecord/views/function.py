@@ -144,7 +144,7 @@ class FunctionDetailSerializer(FunctionListSerializer):
 class FunctionFilterSet(django_filters.FilterSet):
     class Meta:
         model = Function
-        fields = ('validation_start', 'validation_end', 'state')
+        fields = ('validation_start', 'validation_end', 'state', 'version')
 
     validation_start = django_filters.DateFilter(method='filter_validation_start')
     validation_end = django_filters.DateFilter(method='filter_validation_end')
@@ -170,4 +170,6 @@ class FunctionViewSet(DetailSerializerMixin, viewsets.ModelViewSet):
     http_method_names = ['get', 'head', 'options', 'put', 'patch']
 
     def get_queryset(self):
+        if 'version' in self.request.query_params:
+            return self.queryset
         return self.queryset.latest_version()
