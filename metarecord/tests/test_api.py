@@ -576,3 +576,35 @@ def test_function_validation_date_filtering(user_api_client, filtering, expected
     response = user_api_client.get(FUNCTION_LIST_URL + '?' + filtering)
     assert response.status_code == 200
     assert_response_functions(response, [functions[index] for index in expected_indexes])
+
+
+@pytest.mark.parametrize('filtering, expected_indexes', (
+        ('', [0, 1, 2, 4]),
+        ('state=draft', [0, 4]),
+        ('state=sent_for_review', [1]),
+        ('state=waiting_for_approval', [2]),
+        ('state=approved', [3]),
+))
+@pytest.mark.django_db
+def test_function_state_filter(user_api_client, filtering, expected_indexes):
+    functions = (
+        Function.objects.create(
+            name='function_0', function_id='00', state=Function.DRAFT
+        ),
+        Function.objects.create(
+            name='function_1', function_id='01', state=Function.SENT_FOR_REVIEW
+        ),
+        Function.objects.create(
+            name='function_2', function_id='02', state=Function.WAITING_FOR_APPROVAL
+        ),
+        Function.objects.create(
+            name='function_3', function_id='03', state=Function.APPROVED
+        ),
+        Function.objects.create(
+            name='function_4', function_id='03', state=Function.DRAFT
+        ),
+    )
+
+    response = user_api_client.get(FUNCTION_LIST_URL + '?' + filtering)
+    assert response.status_code == 200
+    assert_response_functions(response, [functions[index] for index in expected_indexes])
