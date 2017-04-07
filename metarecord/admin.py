@@ -35,7 +35,7 @@ class MetadataVersionInline(admin.TabularInline):
 
     model = MetadataVersion
     extra = 0
-    readonly_fields = ('modified_at', 'modified_by', 'state')
+    readonly_fields = ('modified_at', 'modified_by', 'state', 'validation_start', 'validation_end')
 
     def has_add_permission(self, request):
         return False
@@ -44,7 +44,9 @@ class MetadataVersionInline(admin.TabularInline):
 class FunctionAdmin(StructuralElementAdmin):
     list_display = ('get_function_id', 'name', 'state', 'version')
     ordering = ('function_id', 'version')
-    fields = ('parent', 'function_id', 'name', 'state', 'is_template', 'error_count')
+    fields = (
+        'parent', 'function_id', 'name', 'state', 'is_template', 'error_count', 'validation_start', 'validation_end'
+    )
     inlines = (MetadataVersionInline,)
 
     def get_function_id(self, obj):

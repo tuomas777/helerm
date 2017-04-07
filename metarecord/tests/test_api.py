@@ -1,3 +1,4 @@
+import datetime
 import uuid
 import pytest
 from rest_framework.reverse import reverse
@@ -337,6 +338,7 @@ def test_metadata_version(user_api_client, user_2_api_client, function, function
     url = get_function_detail_url(function)
     set_permissions(user_api_client, Function.CAN_EDIT)
     set_permissions(user_2_api_client, Function.CAN_EDIT)
+    function_data['validation_start'] = '2015-01-01'
 
     response = user_api_client.put(url, data=function_data)
     assert response.status_code == 200
@@ -348,8 +350,10 @@ def test_metadata_version(user_api_client, user_2_api_client, function, function
     assert metadata_version.state == Function.DRAFT
     assert metadata_version.modified_at == original_modified_at
     assert metadata_version.modified_by == user_api_client.user
+    assert metadata_version.validation_start == datetime.date(2015, 1, 1)
+    assert metadata_version.validation_end is None
 
-    response = user_2_api_client.patch(url, data={'state': Function.SENT_FOR_REVIEW})
+    response = user_2_api_client.patch(url, data={'state': Function.SENT_FOR_REVIEW, 'validation_end': '2016-01-01'})
     assert response.status_code == 200
 
     new_function = Function.objects.last()
@@ -358,6 +362,8 @@ def test_metadata_version(user_api_client, user_2_api_client, function, function
     assert metadata_version.state == Function.SENT_FOR_REVIEW
     assert metadata_version.modified_at == new_function.modified_at > original_modified_at
     assert metadata_version.modified_by == user_2_api_client.user
+    assert metadata_version.validation_start is None
+    assert metadata_version.validation_end == datetime.date(2016, 1, 1)
 
 
 @pytest.mark.django_db
@@ -509,3 +515,31 @@ def test_attribute_validations_when_sent_for_review(
     function.save(update_fields=('attributes',))
     response = super_user_api_client.patch(get_function_detail_url(function), data={'state': Function.SENT_FOR_REVIEW})
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_function_patch_required_fields(function_data, user_api_client, function):
+    set_permissions(user_api_client, Function.CAN_REVIEW)
+
+    function.state = Function.SENT_FOR_REVIEW
+    function.save(update_fields=('state',))
+
+    response = user_api_client.patch(get_function_detail_url(function), data=function_data)
+    assert response.status_code == 400
+    assert '"state", "validation_start" or "validation_en" required.' in str(response.data)
+
+
+@pytest.mark.django_db
+def test_function_validation_date_validation(user_api_client, function, function_data):
+    url = get_function_detail_url(function)
+    set_permissions(user_api_client, (Function.CAN_EDIT, Function.CAN_REVIEW))
+    function_data['validation_start'] = '2015-01-02'
+    function_data['validation_end'] = '2015-01-01'
+
+    response = user_api_client.put(url, data=function_data)
+    assert response.status_code == 400
+    assert '"validation_start" cannot be after "validation_end".' in str(response.data)
+
+    response = user_api_client.patch(url, data=function_data)
+    assert response.status_code == 400
+    assert '"validation_start" cannot be after "validation_end".' in str(response.data)

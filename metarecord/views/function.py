@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Q
 from django.utils.translation import ugettext_lazy as _
 from rest_framework import exceptions, serializers, viewsets
 
@@ -60,9 +61,14 @@ class FunctionDetailSerializer(FunctionListSerializer):
         return function
 
     def validate(self, data):
+        new_validation_start = data.get('validation_start')
+        new_validation_end = data.get('validation_end')
+        if new_validation_start and new_validation_end and new_validation_start > new_validation_end:
+            raise exceptions.ValidationError(_('"validation_start" cannot be after "validation_end".'))
+
         if self.partial:
-            if 'state' not in data:
-                raise exceptions.ValidationError({'state': self.error_messages['required']})
+            if not any(field in data for field in ('state', 'validation_start', 'validation_end')):
+                raise exceptions.ValidationError(_('"state", "validation_start" or "validation_en" required.'))
             self.check_state_change(self.instance.state, data['state'])
 
             if self.instance.state == Function.DRAFT and data['state'] != Function.DRAFT:
@@ -76,12 +82,18 @@ class FunctionDetailSerializer(FunctionListSerializer):
         user = self.context['request'].user
 
         if self.partial:
-            state = validated_data['state']
-            if instance.state == state:
+            allowed_fields = {'state', 'validation_start', 'validation_end'}
+            data = {field: validated_data[field] for field in allowed_fields if field in validated_data}
+            if not data:
                 return instance
 
-            # ignore other fields than state and do an actual update instead of a new version
-            new_function = super().update(instance, {'state': validated_data['state']})
+            # ignore other fields than state, validation_start and validation_end
+            # and do an actual update instead of a new version
+            new_function = super().update(instance, {
+                'state': validated_data.get('state'),
+                'validation_start': validated_data.get('validation_start'),
+                'validation_end': validated_data.get('validation_end'),
+            })
             new_function.create_metadata_version(user)
             return new_function
 
