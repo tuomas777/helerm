@@ -1,6 +1,8 @@
 from django.db import transaction
 from django.db.models import Q
 from django.utils.translation import ugettext_lazy as _
+
+import django_filters
 from rest_framework import exceptions, serializers, viewsets
 
 from metarecord.models import Action, Attribute, Function, Phase, Record
@@ -139,10 +141,31 @@ class FunctionDetailSerializer(FunctionListSerializer):
             raise exceptions.PermissionDenied(_('No permission for the state change.'))
 
 
+class FunctionFilterSet(django_filters.FilterSet):
+    class Meta:
+        model = Function
+        fields = ('validation_start', 'validation_end')
+
+    validation_start = django_filters.DateFilter(method='filter_validation_start')
+    validation_end = django_filters.DateFilter(method='filter_validation_end')
+
+    def filter_validation_start(self, queryset, name, value):
+        queryset = queryset.exclude(Q(validation_start__isnull=True) & Q(validation_end__isnull=True))
+        queryset = queryset.filter(Q(validation_end__isnull=True) | Q(validation_end__gte=value))
+        return queryset
+
+    def filter_validation_end(self, queryset, name, value):
+        queryset = queryset.exclude(Q(validation_start__isnull=True) & Q(validation_end__isnull=True))
+        queryset = queryset.filter(Q(validation_start__isnull=True) | Q(validation_start__lte=value))
+        return queryset
+
+
 class FunctionViewSet(DetailSerializerMixin, viewsets.ModelViewSet):
     queryset = Function.objects.filter(is_template=False).select_related('modified_by').prefetch_related('phases')
     serializer_class = FunctionListSerializer
     serializer_class_detail = FunctionDetailSerializer
+    filter_backends = (django_filters.rest_framework.DjangoFilterBackend,)
+    filter_class = FunctionFilterSet
     lookup_field = 'uuid'
     http_method_names = ['get', 'head', 'options', 'put', 'patch']
 

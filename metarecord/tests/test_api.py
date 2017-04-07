@@ -3,7 +3,7 @@ import uuid
 import pytest
 from rest_framework.reverse import reverse
 from metarecord.models import Action, Attribute, Function, Phase, Record
-from metarecord.tests.utils import check_attribute_errors, set_permissions
+from metarecord.tests.utils import assert_response_functions, check_attribute_errors, set_permissions
 
 
 FUNCTION_LIST_URL = reverse('v1:function-list')
@@ -543,3 +543,36 @@ def test_function_validation_date_validation(user_api_client, function, function
     response = user_api_client.patch(url, data=function_data)
     assert response.status_code == 400
     assert '"validation_start" cannot be after "validation_end".' in str(response.data)
+
+
+@pytest.mark.parametrize('filtering, expected_indexes', (
+        ('', [0, 1, 2, 3, 4]),
+        ('validation_start=1998-05-05&validation_end=1999-05-05', [4]),
+        ('validation_start=2007-05-05', [1]),
+        ('validation_start=2001-05-05&validation_end=2004-05-05', [1, 2, 3, 4]),
+        ('validation_start=2005-05-05&validation_end=2006-05-05', [1, 3, 4]),
+        ('validation_end=1999-05-05', [4]),
+))
+@pytest.mark.django_db
+def test_function_validation_date_filtering(user_api_client, filtering, expected_indexes):
+    functions = (
+        Function.objects.create(
+            name='function_0', function_id='00'
+        ),
+        Function.objects.create(
+            name='function_1', function_id='01', validation_start='2000-05-05'
+        ),
+        Function.objects.create(
+            name='function_2', function_id='02', validation_start='2002-05-05', validation_end='2004-05-05'
+        ),
+        Function.objects.create(
+            name='function_3', function_id='03', validation_start='2003-05-05', validation_end='2005-05-05'
+        ),
+        Function.objects.create(
+            name='function_4', function_id='04', validation_end='2006-05-05'
+        ),
+    )
+
+    response = user_api_client.get(FUNCTION_LIST_URL + '?' + filtering)
+    assert response.status_code == 200
+    assert_response_functions(response, [functions[index] for index in expected_indexes])
